@@ -4,6 +4,7 @@ import sys
 from random import randint, choice
 from math import sin, cos, radians
 
+
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 FPS = 144
@@ -12,6 +13,7 @@ FPS = 144
 class Game:
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()
         screen_info = pygame.display.Info()
         self.screen_width = screen_info.current_w
         self.screen_height = screen_info.current_h
@@ -24,14 +26,14 @@ class Game:
             screen_rect=self.rect,
             center=(self.rect.width * 0.1, self.rect.centery),
             size=(self.rect.width * 0.005, self.rect.height * 0.1),
-            keys=(pygame.K_w, pygame.K_s)
+            keys=(pygame.K_w, pygame.K_s),
         )
         self.player_2 = Paddle(
             screen_rect=self.rect,
             center=(self.rect.width * 0.9, self.rect.centery),
             size=(self.rect.width * 0.005, self.rect.height * 0.1),
             keys=(pygame.K_UP, pygame.K_DOWN),
-            is_automatic=True
+            is_automatic=True,
         )
         self.ball = Ball(
             self.rect,
@@ -46,7 +48,7 @@ class Game:
             center=(self.rect.width * 0.75, self.rect.height * 0.1),
             paddle=self.player_2
         )
-
+    
         self.paddles = pygame.sprite.Group()
         self.balls = pygame.sprite.Group()
         self.scores = pygame.sprite.Group()
@@ -70,6 +72,8 @@ class Game:
     def main_loop(self):
         game = True
         while game:
+            dt = self.clock.tick(FPS)
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     game = False
@@ -78,7 +82,7 @@ class Game:
                 game = False
 
             self.screen.fill((BLACK))
-            self.paddles.update(self.ball)
+            self.paddles.update(self.ball, dt)
             self.balls.update(self.paddles)
             self.scores.update()
             self.check_goal()
@@ -91,7 +95,6 @@ class Game:
                 (self.rect.centerx, self.rect.top)
             )
             pygame.display.flip()
-            self.clock.tick(FPS)
         pygame.quit()
 
 
@@ -106,6 +109,7 @@ class Paddle(pygame.sprite.Sprite):
             is_automatic=False,
             speed=5,
             score=0,
+            delay=13,
     ):
         super().__init__()
         self.image = pygame.Surface((size))
@@ -117,8 +121,13 @@ class Paddle(pygame.sprite.Sprite):
         self.speed = speed
         self.screen_rect = screen_rect
         self.score = score
+        self.elapsed_time = 0
+        self.delay = delay
+        self.direction = 0
     
-    def update(self, ball):
+    def update(self, ball, dt):
+        self.prev_y = self.rect.centery
+
         keys = pygame.key.get_pressed()
         if not self.is_automatic:
             if keys[self.keys[0]]:
@@ -127,13 +136,24 @@ class Paddle(pygame.sprite.Sprite):
             if keys[self.keys[1]]:
                 if self.rect.bottom <= self.screen_rect.bottom:
                     self.rect.y += self.speed
+
+            if self.rect.centery < self.prev_y:
+                self.direction = 0
+            elif self.rect.centery > self.prev_y:
+                self.direction = 180
+            else:
+                self.direction = 90
+
         else:
-            if ball.rect.centery < self.rect.centery:
-                if self.rect.top >= self.screen_rect.top:
-                    self.rect.y -= self.speed
-            if ball.rect.centery > self.rect.centery:
-                if self.rect.bottom <= self.screen_rect.bottom:
-                    self.rect.y += self.speed
+            self.elapsed_time += dt
+            if self.elapsed_time >= self.delay:
+                if ball.rect.centery < self.rect.centery:
+                    if self.rect.top >= self.screen_rect.top:
+                        self.rect.y -= self.speed
+                if ball.rect.centery > self.rect.centery:
+                    if self.rect.bottom <= self.screen_rect.bottom:
+                        self.rect.y += self.speed
+                self.elapsed_time = 0
 
 
 class Ball(pygame.sprite.Sprite):
@@ -189,6 +209,10 @@ class Ball(pygame.sprite.Sprite):
         for paddle in paddles:
             if paddle.rect.colliderect(self.rect):
                 self.direction *= -1
+                if paddle.direction == 0:
+                    self.direction -= 5
+                elif paddle.direction == 180:
+                    self.direction += 5
 
     def throw_in(self):
         """
